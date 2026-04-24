@@ -12,10 +12,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Show ffmpeg / encoder info
+      - name: Install ffmpeg
         run: |
+          if ! command -v ffmpeg >/dev/null 2>&1; then
+            brew update
+            brew install ffmpeg
+          fi
+          which ffmpeg
           ffmpeg -version | head -1
-          ffmpeg -hide_banner -encoders 2>/dev/null | grep -i videotoolbox || true
+
+      - name: Show VideoToolbox encoder availability
+        run: |
+          ffmpeg -hide_banner -encoders 2>/dev/null | grep -i videotoolbox || echo "WARNING: no videotoolbox encoders found"
 
       - name: Convert all WebMs to HEVC+alpha MOV
         run: |
