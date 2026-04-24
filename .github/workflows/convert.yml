@@ -1,0 +1,52 @@
+name: Convert WebM -> HEVC+alpha MOV
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'videos/*.webm'
+      - '.github/workflows/convert.yml'
+
+jobs:
+  convert:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show ffmpeg / encoder info
+        run: |
+          ffmpeg -version | head -1
+          ffmpeg -hide_banner -encoders 2>/dev/null | grep -i videotoolbox || true
+
+      - name: Convert all WebMs to HEVC+alpha MOV
+        run: |
+          set -e
+          mkdir -p out
+          shopt -s nullglob
+          for f in videos/*.webm; do
+            name=$(basename "$f" .webm)
+            echo "=== Converting: $f -> out/${name}.mov ==="
+            ffmpeg -y -i "$f" \
+              -c:v hevc_videotoolbox \
+              -alpha_quality 0.75 \
+              -tag:v hvc1 \
+              -pix_fmt bgra \
+              -an \
+              "out/${name}.mov"
+          done
+          ls -la out/
+
+      - name: Verify alpha channel in outputs
+        run: |
+          for f in out/*.mov; do
+            echo "--- $f ---"
+            ffprobe -v error -select_streams v:0 \
+              -show_entries stream=codec_name,pix_fmt,width,height \
+              -of default=noprint_wrappers=1 "$f"
+          done
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hevc-alpha-movs
+          path: out/*.mov
+          if-no-files-found: error
+          retention-days: 7
