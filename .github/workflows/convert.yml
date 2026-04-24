@@ -14,16 +14,31 @@ jobs:
 
       - name: Install ffmpeg
         run: |
+          set -x
+          sw_vers
           if ! command -v ffmpeg >/dev/null 2>&1; then
-            brew update
+            echo "ffmpeg not found, installing via brew..."
             brew install ffmpeg
+          else
+            echo "ffmpeg already present"
           fi
           which ffmpeg
-          ffmpeg -version | head -1
+          ffmpeg -version | head -3
 
       - name: Show VideoToolbox encoder availability
         run: |
-          ffmpeg -hide_banner -encoders 2>/dev/null | grep -i videotoolbox || echo "WARNING: no videotoolbox encoders found"
+          echo "--- videotoolbox encoders ---"
+          ffmpeg -hide_banner -encoders | grep -i videotoolbox || echo "(none found)"
+          echo "--- hevc_videotoolbox options ---"
+          ffmpeg -hide_banner -h encoder=hevc_videotoolbox || true
+
+      - name: List input videos
+        run: |
+          ls -la videos/
+          for f in videos/*.webm; do
+            echo "=== probe: $f ==="
+            ffprobe -v error -show_entries stream=codec_name,pix_fmt,width,height -of default=noprint_wrappers=1 "$f"
+          done
 
       - name: Convert all WebMs to HEVC+alpha MOV
         run: |
@@ -32,15 +47,21 @@ jobs:
           shopt -s nullglob
           for f in videos/*.webm; do
             name=$(basename "$f" .webm)
-            echo "=== Converting: $f -> out/${name}.mov ==="
-            ffmpeg -y -i "$f" \
+            echo ""
+            echo "========================================="
+            echo "Converting: $f -> out/${name}.mov"
+            echo "========================================="
+            ffmpeg -y -hide_banner -i "$f" \
               -c:v hevc_videotoolbox \
               -alpha_quality 0.75 \
               -tag:v hvc1 \
               -pix_fmt bgra \
               -an \
               "out/${name}.mov"
+            echo "--> done: $(ls -la "out/${name}.mov")"
           done
+          echo ""
+          echo "=== all outputs ==="
           ls -la out/
 
       - name: Verify alpha channel in outputs
