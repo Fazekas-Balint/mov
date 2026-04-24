@@ -47,12 +47,23 @@ jobs:
           shopt -s nullglob
           for f in videos/*.webm; do
             name=$(basename "$f" .webm)
+            codec=$(ffprobe -v error -select_streams v:0 \
+              -show_entries stream=codec_name \
+              -of default=noprint_wrappers=1:nokey=1 "$f")
+            case "$codec" in
+              vp8) decoder="libvpx" ;;
+              vp9) decoder="libvpx-vp9" ;;
+              *)   decoder="" ;;
+            esac
             echo ""
             echo "========================================="
-            echo "Converting: $f -> out/${name}.mov"
+            echo "Converting: $f (codec=$codec, decoder=${decoder:-auto}) -> out/${name}.mov"
             echo "========================================="
-            ffmpeg -y -hide_banner -i "$f" \
+            ffmpeg -y -hide_banner \
+              ${decoder:+-c:v $decoder} \
+              -i "$f" \
               -c:v hevc_videotoolbox \
+              -allow_sw 1 \
               -alpha_quality 0.75 \
               -tag:v hvc1 \
               -pix_fmt bgra \
